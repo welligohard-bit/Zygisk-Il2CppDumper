@@ -16,39 +16,84 @@
 #include <sys/mman.h>
 #include <linux/unistd.h>
 #include <array>
+#include <vector>
 
-void hack_start(const char *game_data_dir) {
-    bool load = false;
-    void *handle = nullptr;
+// Helper to scan a memory region for a specific byte pattern
+const void* PatternScan(const void* base_addr, size_t region_size, const char* pattern) {
+    const uint8_t* base = reinterpret_cast<const uint8_t*>(base_addr);
+    std::vector<int> bytes;
+    
+    // Parse the hex string pattern (e.g., "7F 45 4C 46 ? ? ? 00")
+    std::string pat(pattern);
+    size_t pos = 0;
+    while ((pos = pat.find(' ')) != std::string::npos || !pat.empty()) {
+        std::string token = pat.substr(0, pos);
+        if (token == "?") {
+            bytes.push_back(-1); // Wildcard
+        } else {
+            bytes.push_back(std::stoul(token, nullptr, 16));
+        }
+        if (pos == std::string::npos) break;
+        pat.erase(0, pos + 1);
+    }
 
-    LOGI("hack_start called. Monitoring libil2cpp.so export initializations...");
-
-    // Poll up to 20 times with extended spacing to let constructors settle
-    for (int i = 0; i < 20; i++) {
-        handle = xdl_open("libil2cpp.so", 0);
-        if (handle) {
-            // Check if our crucial export symbol is actually resolved yet
-            void* init_sym = xdl_sym(handle, "il2cpp_init", nullptr);
-            if (init_sym != nullptr) {
-                load = true;
+    // Scan memory for the pattern match
+    for (size_t i = 0; i < region_size - bytes.size(); ++i) {
+        bool match = true;
+        for (size_t j = 0; j < bytes.size(); ++j) {
+            if (bytes[j] != -1 && base[i + j] != bytes[j]) {
+                match = false;
                 break;
-            } else {
-                LOGW("libil2cpp.so mapped, but il2cpp_init symbol isn't ready yet. Retrying...");
-                xdl_close(handle); // Close the handle before retrying
-                handle = nullptr;
             }
         }
-        sleep(2); // Wait 2 seconds between registration checks
+        if (match) return reinterpret_cast<const void*>(base + i);
+    }
+    return nullptr;
+}
+void hack_start(const char *game_data_dir) {
+    void *handle = nullptr;
+    LOGI("hack_start called. Performing deep scan for stripped symbols...");
+
+    for (int i = 0; i < 15; i++) {
+        handle = xdl_open("libil2cpp.so", 0);
+        if (handle) break;
+        sleep(2);
     }
 
-    if (load && handle != nullptr) {
-        LOGI("il2cpp_init successfully resolved! Executing API initialization and dump.");
-        il2cpp_api_init(handle);
-        il2cpp_dump(game_data_dir);
-        xdl_close(handle); // Clean up handle allocation when finished
-    } else {
-        LOGE("Aborted: libil2cpp.so export symbols never completely initialized.");
+    if (!handle) {
+        LOGE("Aborted: libil2cpp.so could not be opened by xdl.");
+        return;
     }
+
+    // 1. Try standard lookup first in case it's not stripped
+    void* init_fn = xdl_sym(handle, "il2cpp_init", nullptr);
+
+    // 2. If stripped, extract memory boundaries and perform pattern scan
+    if (init_fn == nullptr) {
+        LOGW("il2cpp_init symbol missing from export table. Initiating pattern scan...");
+        
+        xdl_info_t info;
+        if (xdl_info(handle, XDL_DI_DLINFO, &info)) {
+            // Common AArch64 (64-bit ARM) signature for the start of il2cpp::vm::Runtime::Init
+            // This pattern can vary slightly depending on Unity version.
+            const char* aarch64_pattern = "FF 83 00 D1 F6 57 01 A9 F4 4F 02 A9 FD 7B 03 A9 FD C3 00 91";
+            
+            init_fn = const_cast<void*>(PatternScan(info.dli_fbase, info.dli_fsize, aarch64_pattern));
+        }
+    }
+
+    // 3. Execute initialization if found via either method
+    if (init_fn != nullptr) {
+        LOGI("Found il2cpp_init execution point at: %p", init_fn);
+        
+        // Feed the resolved pointer directly into the API initialization structure
+        il2cpp_api_init(init_fn); 
+        il2cpp_dump(game_data_dir);
+    } else {
+        LOGE("Critical Error: Core engine signature signature matching failed. Symbol is heavily obfuscated.");
+    }
+    
+    xdl_close(handle);
 }
 
 std::string GetLibDir(JavaVM *vms) {
