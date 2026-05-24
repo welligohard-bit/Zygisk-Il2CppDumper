@@ -1,3 +1,7 @@
+//
+// Created by Perfare on 2020/7/4.
+//
+
 #include "hack.h"
 #include "il2cpp_dump.h"
 #include "log.h"
@@ -12,22 +16,17 @@
 #include <sys/mman.h>
 #include <linux/unistd.h>
 #include <array>
-
-// Ensure ALL of these are explicitly included for the pattern scanner:
 #include <vector>
 #include <string>
 #include <cstdint>
-#include <stdexcept>
 
-// Helper to scan a memory region for a specific byte pattern
-// Bulletproof, NDK-compliant signature scanner
-const void* PatternScan(const void* base_addr, size_t region_size, const char* pattern) {
-    if (!base_addr || region_size == 0 || !pattern) return nullptr;
+// Bulletproof pattern scanner utilizing direct byte comparison
+const void* PatternScan(const void* base_addr, size_t region_size) {
+    if (!base_addr || region_size == 0) return nullptr;
 
     const uint8_t* base = static_cast<const uint8_t*>(base_addr);
     
-    // Hardcoded byte array representation of the target function's signature
-    // This matches: FF 83 00 D1 F6 57 01 A9 F4 4F 02 A9 FD 7B 03 A9 FD C3 00 91
+    // Exact byte array representation of target signature
     const uint8_t target_sig[] = {
         0xFF, 0x83, 0x00, 0xD1, 0xF6, 0x57, 0x01, 0xA9, 
         0xF4, 0x4F, 0x02, 0xA9, 0xFD, 0x7B, 0x03, 0xA9, 
@@ -37,7 +36,6 @@ const void* PatternScan(const void* base_addr, size_t region_size, const char* p
 
     if (region_size < sig_size) return nullptr;
 
-    // Direct byte comparison loop
     for (size_t i = 0; i <= region_size - sig_size; ++i) {
         bool match = true;
         for (size_t j = 0; j < sig_size; ++j) {
@@ -55,7 +53,7 @@ const void* PatternScan(const void* base_addr, size_t region_size, const char* p
 
 void hack_start(const char *game_data_dir) {
     void *handle = nullptr;
-    LOGI("hack_start called. Performing deep scan for stripped symbols...");
+    LOGI("hack_start called. Monitoring target symbols...");
 
     for (int i = 0; i < 15; i++) {
         handle = xdl_open("libil2cpp.so", 0);
@@ -77,9 +75,8 @@ void hack_start(const char *game_data_dir) {
         
         xdl_info_t info;
         if (xdl_info(handle, XDL_DI_DLINFO, &info)) {
-            // Common AArch64 pattern for Unity engine runtime initialization entry points
-            const char* aarch64_pattern = "FF 83 00 D1 F6 57 01 A9 F4 4F 02 A9 FD 7B 03 A9 FD C3 00 91";
-            init_fn = const_cast<void*>(PatternScan(info.dli_fbase, info.dli_fsize, aarch64_pattern));
+            // Corrected to use dli_ssize as required by your project's xdl library build
+            init_fn = const_cast<void*>(PatternScan(info.dli_fbase, info.dli_ssize));
         }
     }
 
@@ -262,4 +259,10 @@ void hack_prepare(const char *game_data_dir, void *data, size_t length) {
 #if defined(__arm__) || defined(__aarch64__)
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
-    auto game_data_dir = (const char *)
+    auto game_data_dir = (const char *) reserved;
+    std::thread hack_thread(hack_start, game_data_dir);
+    hack_thread.detach();
+    return JNI_VERSION_1_6;
+}
+
+#endif
