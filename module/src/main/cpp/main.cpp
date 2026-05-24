@@ -33,12 +33,43 @@ public:
 
     void postAppSpecialize(const AppSpecializeArgs *) override {
         if (enable_hack) {
-            // We pass the delay logic inside the lambda thread so it doesn't freeze the main game startup
             std::thread hack_thread([this]() {
-                LOGI("Dump thread started. Waiting for libil2cpp.so to load...");
+                LOGI("Dump thread started. Scanning memory maps for libil2cpp.so...");
                 
-                void* handle = nullptr;
+                bool found = false;
                 int attempts = 0;
+                
+                // Poll every 1 second for up to 120 seconds
+                while (!found && attempts < 120) {
+                    FILE *fp = fopen("/proc/self/maps", "re");
+                    if (fp) {
+                        char line[512];
+                        while (fgets(line, sizeof(line), fp)) {
+                            if (strstr(line, "libil2cpp.so") != nullptr) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        fclose(fp);
+                    }
+                    
+                    if (!found) {
+                        attempts++;
+                        sleep(1);
+                    }
+                }
+
+                if (found) {
+                    LOGI("libil2cpp.so detected via maps! Giving the engine 2 seconds to settle...");
+                    sleep(2); // Short grace period to ensure initialization completes
+                    hack_prepare(game_data_dir, data, length);
+                } else {
+                    LOGE("Timeout: libil2cpp.so never appeared in memory maps.");
+                }
+            });
+            hack_thread.detach();
+        }
+    }
                 
              // Poll every 1 second, up to 120 seconds max
 while (handle == nullptr && attempts < 120) {
