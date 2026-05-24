@@ -6,7 +6,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <cinttypes>
-#include <dlfcn.h> // Added for dlopen
+#include <cstdio>  // Added to fix the CMake compilation/build error
+#include <dlfcn.h>
 #include "hack.h"
 #include "zygisk.hpp"
 #include "game.h"
@@ -61,30 +62,10 @@ public:
 
                 if (found) {
                     LOGI("libil2cpp.so detected via maps! Giving the engine 2 seconds to settle...");
-                    sleep(2); // Short grace period to ensure initialization completes
+                    sleep(2); 
                     hack_prepare(game_data_dir, data, length);
                 } else {
                     LOGE("Timeout: libil2cpp.so never appeared in memory maps.");
-                }
-            });
-            hack_thread.detach();
-        }
-    }
-                
-             // Poll every 1 second, up to 120 seconds max
-while (handle == nullptr && attempts < 120) {
-    handle = dlopen("libil2cpp.so", RTLD_NOLOAD);
-    if (handle == nullptr) {
-        attempts++;
-        sleep(1); 
-    }
-}
-
-                if (handle != nullptr) {
-                    LOGI("libil2cpp.so detected in memory! Starting hack_prepare...");
-                    hack_prepare(game_data_dir, data, length);
-                } else {
-                    LOGE("Timeout: libil2cpp.so was never loaded by the game.");
                 }
             });
             hack_thread.detach();
