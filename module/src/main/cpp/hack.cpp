@@ -75,7 +75,7 @@ void hack_start(const char *game_data_dir) {
         
         xdl_info_t info;
         if (xdl_info(handle, XDL_DI_DLINFO, &info)) {
-            // Corrected to use dli_ssize as required by your project's xdl library build
+            // Fixed parameter count to match the custom PatternScan definition
             init_fn = const_cast<void*>(PatternScan(info.dli_fbase, info.dli_ssize));
         }
     }
