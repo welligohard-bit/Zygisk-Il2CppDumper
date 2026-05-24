@@ -1,7 +1,6 @@
 //
 // Created by Perfare on 2020/7/4.
 //
-
 #include "hack.h"
 #include "il2cpp_dump.h"
 #include "log.h"
@@ -17,7 +16,8 @@
 #include <linux/unistd.h>
 #include <array>
 #include <vector>
-#include <string>  // Added to fix std::string and std::stoul CMake build error
+#include <string>  
+#include <cstdint>  // Added to fix the uint8_t CMake build failure
 
 // Helper to scan a memory region for a specific byte pattern
 const void* PatternScan(const void* base_addr, size_t region_size, const char* pattern) {
