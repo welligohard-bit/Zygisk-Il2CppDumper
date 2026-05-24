@@ -38,7 +38,7 @@ const void* FindDataPattern(const void* base_addr, size_t region_size, const uin
 
 void hack_start(const char *game_data_dir) {
     void *handle = nullptr;
-    LOGI("hack_start called. Initiating adaptive string reference scan...");
+    LOGI("hack_start called. Utilizing hardcoded static offset mapping...");
 
     for (int i = 0; i < 15; i++) {
         handle = xdl_open("libil2cpp.so", 0);
@@ -50,6 +50,32 @@ void hack_start(const char *game_data_dir) {
         LOGE("Aborted: libil2cpp.so could not be opened by xdl.");
         return;
     }
+
+    void* init_fn = nullptr;
+    xdl_info_t info;
+    
+    if (xdl_info(handle, XDL_DI_DLINFO, &info)) {
+        uint64_t base_address = reinterpret_cast<uint64_t>(info.dli_fbase);
+        LOGI("libil2cpp.so loaded base memory address: %p", info.dli_fbase);
+
+        // ==============================================================
+        // PASTE YOUR REBASED GHIDRA ADDRESS HEX HERE
+        // ==============================================================
+        uint64_t il2cpp_init_offset = 0xYOUR_GHIDRA_ADDRESS_HERE; 
+        
+        init_fn = reinterpret_cast<void*>(base_address + il2cpp_init_offset);
+    }
+
+    if (init_fn != nullptr) {
+        LOGI("Manually mapped il2cpp_init entry execution point resolved at: %p", init_fn);
+        il2cpp_api_init(init_fn); 
+        il2cpp_dump(game_data_dir);
+    } else {
+        LOGE("Critical Error: Unable to determine memory base addresses via xdl structures.");
+    }
+    
+    xdl_close(handle);
+}
 
     // 1. Try standard string lookup fallback
     void* init_fn = xdl_sym(handle, "il2cpp_init", nullptr);
