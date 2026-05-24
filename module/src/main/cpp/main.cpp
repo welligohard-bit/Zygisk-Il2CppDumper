@@ -40,14 +40,14 @@ public:
                 void* handle = nullptr;
                 int attempts = 0;
                 
-                // Poll every 1 second, up to 30 seconds max
-                while (handle == nullptr && attempts < 30) {
-                    handle = dlopen("libil2cpp.so", RTLD_NOLOAD); // Checks memory without fully loading it again
-                    if (handle == nullptr) {
-                        attempts++;
-                        sleep(1); 
-                    }
-                }
+             // Poll every 1 second, up to 120 seconds max
+while (handle == nullptr && attempts < 120) {
+    handle = dlopen("libil2cpp.so", RTLD_NOLOAD);
+    if (handle == nullptr) {
+        attempts++;
+        sleep(1); 
+    }
+}
 
                 if (handle != nullptr) {
                     LOGI("libil2cpp.so detected in memory! Starting hack_prepare...");
