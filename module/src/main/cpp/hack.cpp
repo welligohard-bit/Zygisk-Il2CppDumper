@@ -19,19 +19,35 @@
 
 void hack_start(const char *game_data_dir) {
     bool load = false;
-    for (int i = 0; i < 10; i++) {
-        void *handle = xdl_open("libil2cpp.so", 0);
+    void *handle = nullptr;
+
+    LOGI("hack_start called. Monitoring libil2cpp.so export initializations...");
+
+    // Poll up to 20 times with extended spacing to let constructors settle
+    for (int i = 0; i < 20; i++) {
+        handle = xdl_open("libil2cpp.so", 0);
         if (handle) {
-            load = true;
-            il2cpp_api_init(handle);
-            il2cpp_dump(game_data_dir);
-            break;
-        } else {
-            sleep(1);
+            // Check if our crucial export symbol is actually resolved yet
+            void* init_sym = xdl_sym(handle, "il2cpp_init", nullptr);
+            if (init_sym != nullptr) {
+                load = true;
+                break;
+            } else {
+                LOGW("libil2cpp.so mapped, but il2cpp_init symbol isn't ready yet. Retrying...");
+                xdl_close(handle); // Close the handle before retrying
+                handle = nullptr;
+            }
         }
+        sleep(2); // Wait 2 seconds between registration checks
     }
-    if (!load) {
-        LOGI("libil2cpp.so not found in thread %d", gettid());
+
+    if (load && handle != nullptr) {
+        LOGI("il2cpp_init successfully resolved! Executing API initialization and dump.");
+        il2cpp_api_init(handle);
+        il2cpp_dump(game_data_dir);
+        xdl_close(handle); // Clean up handle allocation when finished
+    } else {
+        LOGE("Aborted: libil2cpp.so export symbols never completely initialized.");
     }
 }
 
@@ -112,7 +128,6 @@ struct NativeBridgeCallbacks {
 };
 
 bool NativeBridgeLoad(const char *game_data_dir, int api_level, void *data, size_t length) {
-    //TODO 等待houdini初始化
     sleep(5);
 
     auto libart = dlopen("libart.so", RTLD_NOW);
