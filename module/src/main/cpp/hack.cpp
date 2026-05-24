@@ -20,76 +20,17 @@
 #include <string>
 #include <cstdint>
 
-// Bulletproof pattern scanner utilizing direct byte comparison
-const void* PatternScan(const void* base_addr, size_t region_size) {
-    if (!base_addr || region_size == 0) return nullptr;
+#include <sys/stat.h>
 
+// Finds a data pattern or string in memory
+const void* FindDataPattern(const void* base_addr, size_t region_size, const uint8_t* pattern, size_t pattern_len) {
     const uint8_t* base = static_cast<const uint8_t*>(base_addr);
-    
-    // Exact byte array representation of target signature
-    const uint8_t target_sig[] = {
-        0xFF, 0x83, 0x00, 0xD1, 0xF6, 0x57, 0x01, 0xA9, 
-        0xF4, 0x4F, 0x02, 0xA9, 0xFD, 0x7B, 0x03, 0xA9, 
-        0xFD, 0xC3, 0x00, 0x91
-    };
-    size_t sig_size = sizeof(target_sig);
-
-    if (region_size < sig_size) return nullptr;
-
-    for (size_t i = 0; i <= region_size - sig_size; ++i) {
-        bool match = true;
-        for (size_t j = 0; j < sig_size; ++j) {
-            if (base[i + j] != target_sig[j]) {
-                match = false;
-                break;
-            }
-        }
-        if (match) {
+    for (size_t i = 0; i <= region_size - pattern_len; ++i) {
+        if (memcmp(&base[i], pattern, pattern_len) == 0) {
             return static_cast<const void*>(&base[i]);
         }
     }
     return nullptr;
-}
-
-void hack_start(const char *game_data_dir) {
-    void *handle = nullptr;
-    LOGI("hack_start called. Monitoring target symbols...");
-
-    for (int i = 0; i < 15; i++) {
-        handle = xdl_open("libil2cpp.so", 0);
-        if (handle) break;
-        sleep(2);
-    }
-
-    if (!handle) {
-        LOGE("Aborted: libil2cpp.so could not be opened by xdl.");
-        return;
-    }
-
-    // 1. Try standard lookup first
-    void* init_fn = xdl_sym(handle, "il2cpp_init", nullptr);
-
-    // 2. Fallback pattern scan if symbol table is stripped
-    if (init_fn == nullptr) {
-        LOGW("il2cpp_init symbol missing from export table. Initiating pattern scan...");
-        
-        xdl_info_t info;
-        if (xdl_info(handle, XDL_DI_DLINFO, &info)) {
-            // Fixed parameter count to match the custom PatternScan definition
-            init_fn = const_cast<void*>(PatternScan(info.dli_fbase, info.dli_ssize));
-        }
-    }
-
-    // 3. Execute initialization if found
-    if (init_fn != nullptr) {
-        LOGI("Found il2cpp_init execution point at: %p", init_fn);
-        il2cpp_api_init(init_fn); 
-        il2cpp_dump(game_data_dir);
-    } else {
-        LOGE("Critical Error: Core engine signature matching failed. Symbol is heavily obfuscated.");
-    }
-    
-    xdl_close(handle);
 }
 
 std::string GetLibDir(JavaVM *vms) {
