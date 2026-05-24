@@ -1,6 +1,3 @@
-//
-// Created by Perfare on 2020/7/4.
-//
 #include "hack.h"
 #include "il2cpp_dump.h"
 #include "log.h"
@@ -15,9 +12,12 @@
 #include <sys/mman.h>
 #include <linux/unistd.h>
 #include <array>
+
+// Ensure ALL of these are explicitly included for the pattern scanner:
 #include <vector>
-#include <string>  
-#include <cstdint>  // Added to fix the uint8_t CMake build failure
+#include <string>
+#include <cstdint>
+#include <stdexcept>
 
 // Helper to scan a memory region for a specific byte pattern
 const void* PatternScan(const void* base_addr, size_t region_size, const char* pattern) {
