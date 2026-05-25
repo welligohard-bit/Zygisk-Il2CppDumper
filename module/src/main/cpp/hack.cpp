@@ -85,9 +85,17 @@ void hack_start(std::string game_data_dir) {
 
     LOGI("Handshake successful. Binding framework to base address: %p", (void*)base_address);
 
+    uintptr_t metadata_magic = 0xFAB11BAF; // Or 0xAF1BB1FA
+    for (uintptr_t i = base_address; i < base_address + (62 * 1024 * 1024); i += 4) {
+        if (*reinterpret_cast<uint32_t*>(i) == metadata_magic) {
+            LOGI("LIVE METADATA FOUND IN MEMORY AT OFFSET: 0x%" PRIxPTR, i - base_address);
+            break;
+        }
+    }
+    
     // Initialize parsing sequence with the dynamically isolated memory block
-    il2cpp_api_init((void*)base_address); 
-    il2cpp_dump(game_data_dir.c_str());
+   //il2cpp_api_init((void*)base_address); 
+   // il2cpp_dump(game_data_dir.c_str());
 }
 
 void hack_prepare(const char *game_data_dir, void *data, size_t length) {
