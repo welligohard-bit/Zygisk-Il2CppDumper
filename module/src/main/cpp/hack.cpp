@@ -9,7 +9,7 @@
 #include <thread>
 #include <string>
 
-// Universal ELF scanner with debug logging
+// Filtered ELF scanner: Skips system libraries to find the actual game library
 static uintptr_t find_il2cpp_base() {
     FILE* fp = fopen("/proc/self/maps", "r");
     if (!fp) return 0;
@@ -18,19 +18,31 @@ static uintptr_t find_il2cpp_base() {
     uintptr_t base = 0;
     
     while (fgets(line, sizeof(line), fp)) {
+        // Only inspect executable memory segments
         if (strstr(line, "r-x")) {
+            
+            // IGNORE SYSTEM LIBRARIES: If the line contains these paths, skip it
+            if (strstr(line, "/system/") || 
+                strstr(line, "/apex/") || 
+                strstr(line, "/vendor/") || 
+                strstr(line, "linker") || 
+                strstr(line, "libc.so") || 
+                strstr(line, "libart.so") || 
+                strstr(line, "libmain.so")) {
+                continue;
+            }
+
             uintptr_t start = strtoul(line, nullptr, 16);
             
-            // Validate ELF Magic (0x7F 'E' 'L' 'F')
-            uint32_t magic = *reinterpret_cast<uint32_t*>(start);
-            if (magic == 0x464c457f) {
-                // LOG WHAT WE FOUND to ensure it's not libc.so or libmain.so
-                LOGI("Found ELF at: %p | Map Info: %s", (void*)start, line);
-                
-                // If the log shows it's grabbing the wrong library, you can add 
-                // a check here like: if(strstr(line, "anon")) { base = start; break; }
-                base = start;
-                break;
+            // Safely verify if it's a valid ELF header boundary
+            // We use a try-catch style approach by validating the pointer logic
+            if (start % 4096 == 0) { // ELF allocations are page-aligned
+                uint32_t magic = *reinterpret_cast<uint32_t*>(start);
+                if (magic == 0x464c457f) {
+                    LOGI("Target match found: %s", line);
+                    base = start;
+                    break;
+                }
             }
         }
     }
@@ -39,12 +51,11 @@ static uintptr_t find_il2cpp_base() {
 }
 
 void hack_start(std::string game_data_dir) {
-    // 1. DELAY EXECUTION: Give the game time to decrypt the protected binary
-    LOGI("hack_start: Waiting 10 seconds for game to unpack/decrypt...");
-    sleep(10);
+    // Wait for the game to fully unpack/decrypt its memory structures
+    LOGI("hack_start: Execution delayed. Pacing for 12 seconds...");
+    sleep(12);
 
-    LOGI("hack_start: Scanning memory segments...");
-
+    LOGI("hack_start: Scanning for game memory structures...");
     uintptr_t base_address = 0;
     for (int i = 0; i < 60; i++) {
         base_address = find_il2cpp_base();
@@ -53,36 +64,21 @@ void hack_start(std::string game_data_dir) {
     }
 
     if (base_address == 0) {
-        LOGE("Aborted: Could not locate any executable ELF segment in memory.");
+        LOGE("Aborted: Could not locate a valid game binary segment.");
         return;
     }
 
-    // 2. VERIFY YOUR OFFSET
-    uint64_t il2cpp_init_offset = 0x1D3C0E4; 
-    void* init_fn = reinterpret_cast<void*>(base_address + il2cpp_init_offset);
-    
-    // Read the first 4 bytes of your target to verify it is decrypted code
-    uint32_t target_instruction = *reinterpret_cast<uint32_t*>(init_fn);
-    LOGI("Mapping success. Base: %p, Target: %p, Target First Bytes: 0x%X", 
-         (void*)base_address, init_fn, target_instruction);
+    LOGI("Initialization handshake successful. Target base verified at: %p", (void*)base_address);
 
-    // 3. INITIALIZE API
-    // Pass the BASE ADDRESS, not the init_fn. The dumper needs the base to resolve symbols.
-    if (base_address != 0) {
-        il2cpp_api_init((void*)base_address); 
-        il2cpp_dump(game_data_dir.c_str());
-    } else {
-        LOGE("Critical Error: Calculation resulted in a null pointer.");
-    }
+    // Call initializer with the safely isolated base address
+    il2cpp_api_init((void*)base_address); 
+    il2cpp_dump(game_data_dir.c_str());
 }
 
+// Entrypoint required by main.cpp
 void hack_prepare(const char *game_data_dir, void *data, size_t length) {
-    LOGI("hack_prepare: Spawning delayed dumper thread...");
-    
-    // Pass the path by value to the thread to avoid dangling pointers
+    LOGI("hack_prepare: Forking execution thread...");
     std::string dir_str(game_data_dir);
-    
-    // Run the dump process in a separate thread so the game can continue loading
     std::thread hack_thread(hack_start, dir_str);
     hack_thread.detach();
 }
