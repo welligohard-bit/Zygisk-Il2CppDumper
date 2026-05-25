@@ -9,7 +9,7 @@
 #include <thread>
 #include <string>
 
-// Advanced ELF scanner: filters out system and tool-specific memory spaces
+// Advanced ELF scanner: filters out system libraries, tool-specific spaces, and kernel regions
 static uintptr_t find_il2cpp_base() {
     FILE* fp = fopen("/proc/self/maps", "r");
     if (!fp) return 0;
@@ -31,7 +31,9 @@ static uintptr_t find_il2cpp_base() {
                 strstr(line, "libmain.so") ||
                 strstr(line, "zygisk") ||          // Skip Zygisk injection modules
                 strstr(line, "jit-cache") ||       // Skip JIT runtime caches
-                strstr(line, "memfd")) {           // Skip anonymous file descriptors
+                strstr(line, "memfd") ||           // Skip anonymous file descriptors
+                strstr(line, "[vdso]") ||          // Skip kernel virtual library
+                strstr(line, "[vectors]")) {       // Skip CPU vector tables
                 continue;
             }
 
