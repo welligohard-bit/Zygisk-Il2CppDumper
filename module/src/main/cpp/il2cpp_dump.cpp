@@ -26,60 +26,60 @@
 static uint64_t il2cpp_base = 0;
 
 // Bypasses the stripped symbol table using explicit offsets found in Ghidra
+// Uses decltype to perfectly match expected function pointer signatures
 void init_il2cpp_api_direct(uintptr_t base) {
     LOGI("init_il2cpp_api_direct: Mapping function pointers via explicit offsets...");
 
-    // Example Offsets (Replace these values with your actual Ghidra findings)
-    il2cpp_init                        = (int (*) (const char*))(base + 0x1D3C0E4); // <-- Your verified offset
-    il2cpp_domain_get                  = (void* (*) ())         (base + 0x1A2B3C4); // TODO: Replace
-    il2cpp_domain_get_assemblies       = (void** (*) (void*, size_t*))(base + 0x2B3C4D5); // TODO: Replace
-    il2cpp_assembly_get_image          = (void* (*) (void*))    (base + 0x3C4D5E6); // TODO: Replace
-    il2cpp_image_get_name              = (const char* (*) (void*))(base + 0x4D5E6F7); // TODO: Replace
+    // Example Offsets (Replace the hex values with your actual Ghidra findings)
+    
+    // Core Initialization
+    il2cpp_init                        = reinterpret_cast<decltype(il2cpp_init)>(base + 0x1D3C0E4); // <-- Your verified offset
+    il2cpp_domain_get                  = reinterpret_cast<decltype(il2cpp_domain_get)>(base + 0x1A2B3C4); 
+    il2cpp_domain_get_assemblies       = reinterpret_cast<decltype(il2cpp_domain_get_assemblies)>(base + 0x2B3C4D5); 
+    il2cpp_assembly_get_image          = reinterpret_cast<decltype(il2cpp_assembly_get_image)>(base + 0x3C4D5E6); 
+    il2cpp_image_get_name              = reinterpret_cast<decltype(il2cpp_image_get_name)>(base + 0x4D5E6F7); 
     
     // Version specific check pointers (2018.3+)
-    il2cpp_image_get_class_count       = (size_t (*) (void*))   (base + 0x5E6F7A8); // TODO: Replace
-    il2cpp_image_get_class             = (Il2CppClass* (*) (void*, size_t))(base + 0x6F7A8B9); // TODO: Replace
-    il2cpp_class_get_type              = (Il2CppType* (*) (Il2CppClass*))(base + 0x7A8B9C0); // TODO: Replace
+    il2cpp_image_get_class_count       = reinterpret_cast<decltype(il2cpp_image_get_class_count)>(base + 0x5E6F7A8); 
+    il2cpp_image_get_class             = reinterpret_cast<decltype(il2cpp_image_get_class)>(base + 0x6F7A8B9); 
+    il2cpp_class_get_type              = reinterpret_cast<decltype(il2cpp_class_get_type)>(base + 0x7A8B9C0); 
     
     // Core structural descriptors
-    il2cpp_class_from_type             = (Il2CppClass* (*) (const Il2CppType*))(base + 0x8B9C0D1); // TODO: Replace
-    il2cpp_class_get_name              = (const char* (*) (Il2CppClass*))(base + 0x9C0D1E2); // TODO: Replace
-    il2cpp_class_get_namespace         = (const char* (*) (Il2CppClass*))(base + 0xAD1E2F3); // TODO: Replace
-    il2cpp_class_get_flags             = (uint32_t (*) (Il2CppClass*))(base + 0xBE2F304); // TODO: Replace
-    il2cpp_class_is_valuetype          = (bool (*) (Il2CppClass*))(base + 0xCF30415); // TODO: Replace
-    il2cpp_class_is_enum               = (bool (*) (Il2CppClass*))(base + 0xDF40526); // TODO: Replace
-    il2cpp_class_get_parent            = (Il2CppClass* (*) (Il2CppClass*))(base + 0xEF50637); // TODO: Replace
-    il2cpp_class_get_interfaces        = (Il2CppClass* (*) (Il2CppClass*, void**))(base + 0xFF60748); // TODO: Replace
+    il2cpp_class_from_type             = reinterpret_cast<decltype(il2cpp_class_from_type)>(base + 0x8B9C0D1); 
+    il2cpp_class_get_name              = reinterpret_cast<decltype(il2cpp_class_get_name)>(base + 0x9C0D1E2); 
+    il2cpp_class_get_namespace         = reinterpret_cast<decltype(il2cpp_class_get_namespace)>(base + 0xAD1E2F3); 
+    il2cpp_class_get_flags             = reinterpret_cast<decltype(il2cpp_class_get_flags)>(base + 0xBE2F304); 
+    il2cpp_class_is_valuetype          = reinterpret_cast<decltype(il2cpp_class_is_valuetype)>(base + 0xCF30415); 
+    il2cpp_class_is_enum               = reinterpret_cast<decltype(il2cpp_class_is_enum)>(base + 0xDF40526); 
+    il2cpp_class_get_parent            = reinterpret_cast<decltype(il2cpp_class_get_parent)>(base + 0xEF50637); 
+    il2cpp_class_get_interfaces        = reinterpret_cast<decltype(il2cpp_class_get_interfaces)>(base + 0xFF60748); 
     
     // Core member iterators
-    il2cpp_class_get_fields            = (FieldInfo* (*) (Il2CppClass*, void**))(base + 0x1170859); // TODO: Replace
-    il2cpp_class_get_methods           = (MethodInfo* (*) (Il2CppClass*, void**))(base + 0x228096A); // TODO: Replace
-    il2cpp_class_get_properties        = (PropertyInfo* (*) (Il2CppClass*, void**))(base + 0x3390A7B); // TODO: Replace
+    il2cpp_class_get_fields            = reinterpret_cast<decltype(il2cpp_class_get_fields)>(base + 0x1170859); 
+    il2cpp_class_get_methods           = reinterpret_cast<decltype(il2cpp_class_get_methods)>(base + 0x228096A); 
+    il2cpp_class_get_properties        = reinterpret_cast<decltype(il2cpp_class_get_properties)>(base + 0x3390A7B); 
     
     // Member details extraction variables
-    il2cpp_field_get_flags             = (uint32_t (*) (FieldInfo*))(base + 0x44A0B8C); // TODO: Replace
-    il2cpp_field_get_type              = (Il2CppType* (*) (FieldInfo*))(base + 0x55B0C9D); // TODO: Replace
-    il2cpp_field_get_name              = (const char* (*) (FieldInfo*))(base + 0x66C0DAE); // TODO: Replace
-    il2cpp_field_static_get_value      = (void (*) (FieldInfo*, void*))(base + 0x77D0EBF); // TODO: Replace
-    il2cpp_field_get_offset            = (size_t (*) (FieldInfo*))(base + 0x88E0FC0); // TODO: Replace
+    il2cpp_field_get_flags             = reinterpret_cast<decltype(il2cpp_field_get_flags)>(base + 0x44A0B8C); 
+    il2cpp_field_get_type              = reinterpret_cast<decltype(il2cpp_field_get_type)>(base + 0x55B0C9D); 
+    il2cpp_field_get_name              = reinterpret_cast<decltype(il2cpp_field_get_name)>(base + 0x66C0DAE); 
+    il2cpp_field_static_get_value      = reinterpret_cast<decltype(il2cpp_field_static_get_value)>(base + 0x77D0EBF); 
+    il2cpp_field_get_offset            = reinterpret_cast<decltype(il2cpp_field_get_offset)>(base + 0x88E0FC0); 
     
-    il2cpp_method_get_flags            = (uint32_t (*) (const MethodInfo*, uint32_t*))(base + 0x99F01D1); // TODO: Replace
-    il2cpp_method_get_return_type      = (const Il2CppType* (*) (const MethodInfo*))(base + 0xAAF02E2); // TODO: Replace
-    il2cpp_method_get_name             = (const char* (*) (const MethodInfo*))(base + 0xBBF03F3); // TODO: Replace
-    il2cpp_method_get_param_count      = (uint32_t (*) (const MethodInfo*))(base + 0xCCF04F4); // TODO: Replace
-    il2cpp_method_get_param            = (const Il2CppType* (*) (const MethodInfo*, uint32_t))(base + 0xDDF05F5); // TODO: Replace
-    il2cpp_method_get_param_name       = (const char* (*) (const MethodInfo*, uint32_t))(base + 0xEEF06F6); // TODO: Replace
+    il2cpp_method_get_flags            = reinterpret_cast<decltype(il2cpp_method_get_flags)>(base + 0x99F01D1); 
+    il2cpp_method_get_return_type      = reinterpret_cast<decltype(il2cpp_method_get_return_type)>(base + 0xAAF02E2); 
+    il2cpp_method_get_name             = reinterpret_cast<decltype(il2cpp_method_get_name)>(base + 0xBBF03F3); 
+    il2cpp_method_get_param_count      = reinterpret_cast<decltype(il2cpp_method_get_param_count)>(base + 0xCCF04F4); 
+    il2cpp_method_get_param            = reinterpret_cast<decltype(il2cpp_method_get_param)>(base + 0xDDF05F5); 
+    il2cpp_method_get_param_name       = reinterpret_cast<decltype(il2cpp_method_get_param_name)>(base + 0xEEF06F6); 
     
-    il2cpp_property_get_get_method     = (const MethodInfo* (*) (PropertyInfo*))(base + 0xFFF07F7); // TODO: Replace
-    il2cpp_property_get_set_method     = (const MethodInfo* (*) (PropertyInfo*))(base + 0x11008F8); // TODO: Replace
-    il2cpp_property_get_name           = (const char* (*) (PropertyInfo*))(base + 0x22109F9); // TODO: Replace
+    il2cpp_property_get_get_method     = reinterpret_cast<decltype(il2cpp_property_get_get_method)>(base + 0xFFF07F7); 
+    il2cpp_property_get_set_method     = reinterpret_cast<decltype(il2cpp_property_get_set_method)>(base + 0x11008F8); 
+    il2cpp_property_get_name           = reinterpret_cast<decltype(il2cpp_property_get_name)>(base + 0x22109F9); 
     
     // Thread environment contexts
-    il2cpp_is_vm_thread                = (bool (*) (void*))     (base + 0x3320AF0); // TODO: Replace
-    il2cpp_thread_attach               = (void* (*) (void*))    (base + 0x4430BF1); // TODO: Replace
-
-    // Optional utility configurations
-    // il2cpp_type_is_byref            = (bool (*) (const Il2CppType*))(base + 0x5540CF2); 
+    il2cpp_is_vm_thread                = reinterpret_cast<decltype(il2cpp_is_vm_thread)>(base + 0x3320AF0); 
+    il2cpp_thread_attach               = reinterpret_cast<decltype(il2cpp_thread_attach)>(base + 0x4430BF1); 
 }
 
 std::string get_method_modifier(uint32_t flags) {
