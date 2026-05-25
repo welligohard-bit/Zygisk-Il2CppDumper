@@ -9,7 +9,7 @@
 #include <thread>
 #include <string>
 
-// Filtered ELF scanner: Skips system libraries to find the actual game library
+// Advanced ELF scanner: filters out system and tool-specific memory spaces
 static uintptr_t find_il2cpp_base() {
     FILE* fp = fopen("/proc/self/maps", "r");
     if (!fp) return 0;
@@ -18,27 +18,30 @@ static uintptr_t find_il2cpp_base() {
     uintptr_t base = 0;
     
     while (fgets(line, sizeof(line), fp)) {
-        // Only inspect executable memory segments
+        // Look strictly for executable regions
         if (strstr(line, "r-x")) {
             
-            // IGNORE SYSTEM LIBRARIES: If the line contains these paths, skip it
+            // Comprehensive exclusion list to prevent targeting hook tools or system libs
             if (strstr(line, "/system/") || 
                 strstr(line, "/apex/") || 
                 strstr(line, "/vendor/") || 
                 strstr(line, "linker") || 
                 strstr(line, "libc.so") || 
                 strstr(line, "libart.so") || 
-                strstr(line, "libmain.so")) {
+                strstr(line, "libmain.so") ||
+                strstr(line, "zygisk") ||          // Skip Zygisk injection modules
+                strstr(line, "jit-cache") ||       // Skip JIT runtime caches
+                strstr(line, "memfd")) {           // Skip anonymous file descriptors
                 continue;
             }
 
             uintptr_t start = strtoul(line, nullptr, 16);
             
-            // Safely verify if it's a valid ELF header boundary
-            // We use a try-catch style approach by validating the pointer logic
-            if (start % 4096 == 0) { // ELF allocations are page-aligned
+            // Check boundaries on page-aligned allocations
+            if (start % 4096 == 0) {
+                // Safely catch the pointer target
                 uint32_t magic = *reinterpret_cast<uint32_t*>(start);
-                if (magic == 0x464c457f) {
+                if (magic == 0x464c457f) { // Valid ELF format identification
                     LOGI("Target match found: %s", line);
                     base = start;
                     break;
@@ -51,7 +54,6 @@ static uintptr_t find_il2cpp_base() {
 }
 
 void hack_start(std::string game_data_dir) {
-    // Wait for the game to fully unpack/decrypt its memory structures
     LOGI("hack_start: Execution delayed. Pacing for 12 seconds...");
     sleep(12);
 
@@ -70,12 +72,11 @@ void hack_start(std::string game_data_dir) {
 
     LOGI("Initialization handshake successful. Target base verified at: %p", (void*)base_address);
 
-    // Call initializer with the safely isolated base address
+    // Run initialization natively using the safely isolated base
     il2cpp_api_init((void*)base_address); 
     il2cpp_dump(game_data_dir.c_str());
 }
 
-// Entrypoint required by main.cpp
 void hack_prepare(const char *game_data_dir, void *data, size_t length) {
     LOGI("hack_prepare: Forking execution thread...");
     std::string dir_str(game_data_dir);
