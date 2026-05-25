@@ -23,19 +23,6 @@
 // Forward declaration to resolve compiler ordering errors
 void hack_start(const char *game_data_dir);
 
-// Finds a data pattern or string in memory
-const void* FindDataPattern(const void* base_addr, size_t region_size, const uint8_t* pattern, size_t pattern_len) {
-    if (!base_addr || region_size == 0 || !pattern || pattern_len == 0) return nullptr;
-    
-    const uint8_t* base = static_cast<const uint8_t*>(base_addr);
-    for (size_t i = 0; i <= region_size - pattern_len; ++i) {
-        if (memcmp(&base[i], pattern, pattern_len) == 0) {
-            return static_cast<const void*>(&base[i]);
-        }
-    }
-    return nullptr;
-}
-
 void hack_start(const char *game_data_dir) {
     void *handle = nullptr;
     LOGI("hack_start called. Utilizing hardcoded static offset mapping...");
@@ -59,7 +46,7 @@ void hack_start(const char *game_data_dir) {
         LOGI("libil2cpp.so loaded base memory address: %p", info.dli_fbase);
 
         // ==============================================================
-        // PASTE YOUR REBASED GHIDRA ADDRESS HEX HERE
+        // STATIC OFFSET FOUND IN GHIDRA
         // ==============================================================
         uint64_t il2cpp_init_offset = 0x1D3C0E4; 
         
@@ -72,49 +59,6 @@ void hack_start(const char *game_data_dir) {
         il2cpp_dump(game_data_dir);
     } else {
         LOGE("Critical Error: Unable to determine memory base addresses via xdl structures.");
-    }
-    
-    xdl_close(handle);
-}
-
-    // 1. Try standard string lookup fallback
-    void* init_fn = xdl_sym(handle, "il2cpp_init", nullptr);
-
-    // 2. If stripped, locate via string reference reflection
-    if (init_fn == nullptr) {
-        LOGW("Standard exports stripped. Attempting to locate engine via domain string signatures...");
-        
-        xdl_info_t info;
-        if (xdl_info(handle, XDL_DI_DLINFO, &info)) {
-            const char* target_str = "IL2CPP Root Domain";
-            const void* string_addr = FindDataPattern(info.dli_fbase, info.dli_ssize, 
-                                                       reinterpret_cast<const uint8_t*>(target_str), 
-                                                       strlen(target_str));
-            
-            if (string_addr) {
-                LOGI("Located engine string constant at absolute pointer: %p", string_addr);
-                
-                uint64_t target_offset = reinterpret_cast<uint64_t>(string_addr);
-                init_fn = const_cast<void*>(FindDataPattern(info.dli_fbase, info.dli_ssize, 
-                                                           reinterpret_cast<const uint8_t*>(&target_offset), 
-                                                           sizeof(target_offset)));
-                
-                if (!init_fn) {
-                    LOGW("Direct pointer mapping optimized. Utilizing secondary signature verification...");
-                    const uint8_t secondary_sig[] = { 0xFD, 0x7B, 0xBF, 0xA9, 0xFD, 0x03, 0x00, 0x91 };
-                    init_fn = const_cast<void*>(FindDataPattern(info.dli_fbase, info.dli_ssize, secondary_sig, sizeof(secondary_sig)));
-                }
-            }
-        }
-    }
-
-    // 3. Final validation and execution sequence
-    if (init_fn != nullptr) {
-        LOGI("Engine initialization pointer resolved at: %p", init_fn);
-        il2cpp_api_init(init_fn); 
-        il2cpp_dump(game_data_dir);
-    } else {
-        LOGE("Aborted: Engine functions are completely virtualized or encrypted. Manual offset required.");
     }
     
     xdl_close(handle);
