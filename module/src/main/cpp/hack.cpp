@@ -38,13 +38,14 @@ void hack_start(const char *game_data_dir) {
     // 2. Wait for library memory to be readable
     xdl_info_t info;
     bool ready = false;
-    for (int i = 0; i < 10; i++) {
-        if (xdl_info(handle, XDL_DI_DLINFO, &info) && info.dli_fbase != nullptr) {
-            ready = true;
-            break;
-        }
-        sleep(1);
+    // Change to 60 iterations (60 seconds)
+for (int i = 0; i < 60; i++) {
+    if (xdl_info(handle, XDL_DI_DLINFO, &info) && info.dli_fbase != nullptr) {
+        ready = true;
+        break;
     }
+    sleep(1);
+}
 
     if (!ready) {
         LOGE("Aborted: libil2cpp.so found but base address is null.");
