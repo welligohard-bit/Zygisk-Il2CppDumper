@@ -8,6 +8,13 @@
 #include <cstdlib>      // Required for strtoul
 #include "log.h"        // Ensure this defines LOGI and LOGE
 #include "il2cpp_dump.h"// Ensure this declares il2cpp_api_init and il2cpp_dump
+#include "hack.h"
+#include "il2cpp_dump.h" // Ensure this exists in your source folder
+#include "log.h"         // Ensure this exists and contains your LOGI/LOGE defines
+#include <unistd.h>      // Required for sleep()
+#include <cstdio>        // Required for fopen/fgets
+#include <cstring>       // Required for strstr
+#include <cstdlib>       // Required for strtoul
 
 // Helper to find the base address
 static uintptr_t get_lib_base(const char* lib_name) {
