@@ -61,7 +61,7 @@ void hack_start(const char *game_data_dir) {
         // ==============================================================
         // PASTE YOUR REBASED GHIDRA ADDRESS HEX HERE
         // ==============================================================
-        uint64_t il2cpp_init_offset = 0xYOUR_GHIDRA_ADDRESS_HERE; 
+        uint64_t il2cpp_init_offset = 0x1D3C0E4; 
         
         init_fn = reinterpret_cast<void*>(base_address + il2cpp_init_offset);
     }
