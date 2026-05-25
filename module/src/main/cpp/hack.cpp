@@ -10,7 +10,7 @@
 #include <thread>
 #include <string>
 
-// Advanced scanner hunting for anonymous, unnamed executable segments
+// Advanced scanner hunting strictly for the app's native decrypted memory segments
 static uintptr_t find_il2cpp_base() {
     FILE* fp = fopen("/proc/self/maps", "r");
     if (!fp) return 0;
@@ -22,18 +22,20 @@ static uintptr_t find_il2cpp_base() {
         // 1. Must be a read-execute segment
         if (strstr(line, "r-x")) {
             
-            // 2. Strict system exclusion filters
+            // 2. Strict system, engine framework, and runtime environment exclusions
             if (strstr(line, "/system/") || 
                 strstr(line, "/apex/") || 
                 strstr(line, "/vendor/") || 
-                strstr(line, "/data/") ||   // Exclude path-backed app files
+                strstr(line, "/data/") ||   
                 strstr(line, "linker") || 
                 strstr(line, "libc.so") || 
                 strstr(line, "libart.so") || 
                 strstr(line, "libmain.so") ||
                 strstr(line, "zygisk") ||          
                 strstr(line, "memfd") ||          
-                strstr(line, "[") ||        // Strips [vdso], [vectors], [anon:...], etc.
+                strstr(line, "dalvik") ||          // EXCLUDE: Android runtime compilation cache
+                strstr(line, "/dev/ashmem") ||     // EXCLUDE: Android shared memory allocation layer
+                strstr(line, "[") ||        
                 strstr(line, "]")) {
                 continue;
             }
@@ -47,11 +49,10 @@ static uintptr_t find_il2cpp_base() {
 
             size_t region_size = end - start;
 
-            // 3. Lowered Heuristic Threshold:
-            // Look for any completely unnamed executable allocation larger than 3MB.
-            // A clean, anonymous memory region will have empty space where the path usually is.
-            if (region_size > 3 * 1024 * 1024) {
-                LOGI("Target match found by anonymous layout (%zu MB): %s", region_size / (1024 * 1024), line);
+            // 3. Size Heuristic Threshold:
+            // Look for an unnamed executable allocation larger than 10MB that bypassed all filters.
+            if (region_size > 10 * 1024 * 1024) {
+                LOGI("Target match isolated by size profile (%zu MB): %s", region_size / (1024 * 1024), line);
                 base = start;
                 break;
             }
