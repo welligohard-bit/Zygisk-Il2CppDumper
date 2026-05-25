@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <cinttypes>   // Required for cross-platform PRIxPTR / SCNxPTR macros
 #include <sys/mman.h>
 #include <thread>
 #include <string>
@@ -35,10 +36,10 @@ static uintptr_t find_il2cpp_base() {
                 continue;
             }
 
-            // Extract memory range boundaries
+            // Extract memory range boundaries safely across 32-bit and 64-bit architectures
             uintptr_t start = 0;
             uintptr_t end = 0;
-            if (sscanf(line, "%lx-%lx", &start, &end) != 2) {
+            if (sscanf(line, "%" SCNxPTR "-%" SCNxPTR, &start, &end) != 2) {
                 continue;
             }
 
@@ -47,8 +48,6 @@ static uintptr_t find_il2cpp_base() {
 
             // 3. TARGET HEURISTIC: 
             // Look for a large, unnamed executable memory allocation (typically > 15MB)
-            // Protected binaries are large, while system hook fragments are small.
-            // Also ensure it doesn't contain a file path (checking for '/' or '.so')
             if (region_size > 15 * 1024 * 1024 && !strstr(line, "/") && !strstr(line, ".so")) {
                 LOGI("Target match found by layout size (%zu MB): %s", region_size / (1024 * 1024), line);
                 base = start;
