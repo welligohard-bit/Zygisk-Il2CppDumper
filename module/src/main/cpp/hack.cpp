@@ -1,22 +1,13 @@
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <fstream>
-#include <sstream>
-#include <unistd.h>     // Required for sleep()
-#include <cstdio>       // Required for sscanf/etc
-#include <cstring>      // Required for strstr
-#include <cstdlib>      // Required for strtoul
-#include "log.h"        // Ensure this defines LOGI and LOGE
-#include "il2cpp_dump.h"// Ensure this declares il2cpp_api_init and il2cpp_dump
 #include "hack.h"
-#include "il2cpp_dump.h" // Ensure this exists in your source folder
-#include "log.h"         // Ensure this exists and contains your LOGI/LOGE defines
-#include <unistd.h>      // Required for sleep()
-#include <cstdio>        // Required for fopen/fgets
-#include <cstring>       // Required for strstr
-#include <cstdlib>       // Required for strtoul
+#include "il2cpp_dump.h"
+#include "log.h"
+#include <unistd.h>
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
+#include <sys/mman.h>
 
-// Helper to find the base address
+// Helper to find the base address of the library in memory
 static uintptr_t get_lib_base(const char* lib_name) {
     FILE* fp = fopen("/proc/self/maps", "r");
     if (!fp) return 0;
@@ -33,10 +24,12 @@ static uintptr_t get_lib_base(const char* lib_name) {
     return base;
 }
 
+// Internal logic to perform the dump
 void hack_start(const char *game_data_dir) {
     LOGI("hack_start: Scanning for libil2cpp.so memory...");
 
     uintptr_t base_address = 0;
+    // Poll for the library to be mapped
     for (int i = 0; i < 60; i++) {
         base_address = get_lib_base("libil2cpp.so");
         if (base_address != 0) break;
@@ -48,12 +41,14 @@ void hack_start(const char *game_data_dir) {
         return;
     }
 
+    // Verify ELF header
     uint32_t magic = *reinterpret_cast<uint32_t*>(base_address);
     if (magic != 0x464c457f) {
         LOGE("Aborted: Found memory region, but it is not a valid ELF file.");
         return;
     }
 
+    // Offset must be relative to the actual base found in maps
     uint64_t il2cpp_init_offset = 0x1D3C0E4; 
     void* init_fn = reinterpret_cast<void*>(base_address + il2cpp_init_offset);
 
@@ -65,4 +60,14 @@ void hack_start(const char *game_data_dir) {
     } else {
         LOGE("Critical Error: Calculation resulted in a null pointer.");
     }
+}
+
+// This function is required by main.cpp to link correctly
+void hack_prepare(const char *game_data_dir, void *data, size_t length) {
+    LOGI("hack_prepare: Initializing...");
+    
+    // You can process the 'data' buffer here if needed for custom decryption
+    
+    // Start the dumper logic
+    hack_start(game_data_dir);
 }
