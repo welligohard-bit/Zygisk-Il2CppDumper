@@ -28,7 +28,7 @@ void hack_start(const char *game_data_dir) {
     LOGI("hack_start: Waiting for libil2cpp.so to map into memory...");
 
     // 1. Wait for the library handle
-    for (int i = 0; i < 30; i++) { // Increased attempts
+    for (int i = 0; i < 30; i++) {
         handle = xdl_open("libil2cpp.so", 0);
         if (handle) break;
         sleep(2);
@@ -38,6 +38,40 @@ void hack_start(const char *game_data_dir) {
         LOGE("Aborted: libil2cpp.so never appeared in memory.");
         return;
     }
+
+    // 2. Poll until the library sections are actually readable
+    xdl_info_t info;
+    bool ready = false;
+    for (int i = 0; i < 10; i++) {
+        if (xdl_info(handle, XDL_DI_DLINFO, &info) && info.dli_fbase != nullptr) {
+            ready = true;
+            break;
+        }
+        sleep(1);
+    }
+
+    if (!ready) {
+        LOGE("Aborted: libil2cpp.so handle exists, but memory base is null.");
+        xdl_close(handle);
+        return;
+    }
+
+    // 3. Proceed with manual mapping
+    uint64_t base_address = reinterpret_cast<uint64_t>(info.dli_fbase);
+    uint64_t il2cpp_init_offset = 0x1D3C0E4; 
+    void* init_fn = reinterpret_cast<void*>(base_address + il2cpp_init_offset);
+
+    LOGI("libil2cpp.so mapped at: %p. Target: %p", info.dli_fbase, init_fn);
+    
+    if (init_fn != nullptr) {
+        il2cpp_api_init(init_fn); 
+        il2cpp_dump(game_data_dir);
+    } else {
+        LOGE("Critical Error: Calculation resulted in a null pointer.");
+    }
+    
+    xdl_close(handle);
+}
 
     // 2. Poll until the library sections are actually readable
     xdl_info_t info;
