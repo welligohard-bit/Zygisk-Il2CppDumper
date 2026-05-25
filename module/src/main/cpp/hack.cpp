@@ -10,7 +10,7 @@
 #include <thread>
 #include <string>
 
-// Scans for the unbacked, decrypted game engine block based on memory layout size
+// Advanced scanner hunting for anonymous, unnamed executable segments
 static uintptr_t find_il2cpp_base() {
     FILE* fp = fopen("/proc/self/maps", "r");
     if (!fp) return 0;
@@ -19,37 +19,39 @@ static uintptr_t find_il2cpp_base() {
     uintptr_t base = 0;
     
     while (fgets(line, sizeof(line), fp)) {
-        // 1. Must be an executable segment
+        // 1. Must be a read-execute segment
         if (strstr(line, "r-x")) {
             
-            // 2. Filter out standard system libraries and dependencies
+            // 2. Strict system exclusion filters
             if (strstr(line, "/system/") || 
                 strstr(line, "/apex/") || 
                 strstr(line, "/vendor/") || 
+                strstr(line, "/data/") ||   // Exclude path-backed app files
                 strstr(line, "linker") || 
                 strstr(line, "libc.so") || 
                 strstr(line, "libart.so") || 
                 strstr(line, "libmain.so") ||
                 strstr(line, "zygisk") ||          
-                strstr(line, "[vdso]") ||          
-                strstr(line, "[vectors]")) {
+                strstr(line, "memfd") ||          
+                strstr(line, "[") ||        // Strips [vdso], [vectors], [anon:...], etc.
+                strstr(line, "]")) {
                 continue;
             }
 
-            // Extract memory range boundaries safely across 32-bit and 64-bit architectures
+            // Extract memory boundaries
             uintptr_t start = 0;
             uintptr_t end = 0;
             if (sscanf(line, "%" SCNxPTR "-%" SCNxPTR, &start, &end) != 2) {
                 continue;
             }
 
-            // Calculate exact allocation size
             size_t region_size = end - start;
 
-            // 3. TARGET HEURISTIC: 
-            // Look for a large, unnamed executable memory allocation (typically > 15MB)
-            if (region_size > 15 * 1024 * 1024 && !strstr(line, "/") && !strstr(line, ".so")) {
-                LOGI("Target match found by layout size (%zu MB): %s", region_size / (1024 * 1024), line);
+            // 3. Lowered Heuristic Threshold:
+            // Look for any completely unnamed executable allocation larger than 3MB.
+            // A clean, anonymous memory region will have empty space where the path usually is.
+            if (region_size > 3 * 1024 * 1024) {
+                LOGI("Target match found by anonymous layout (%zu MB): %s", region_size / (1024 * 1024), line);
                 base = start;
                 break;
             }
@@ -60,11 +62,11 @@ static uintptr_t find_il2cpp_base() {
 }
 
 void hack_start(std::string game_data_dir) {
-    // Standard delay to ensure unpacking/decryption sequence completes
-    LOGI("hack_start: Execution delayed. Pacing for 12 seconds...");
-    sleep(12);
+    // Extended pacing delay to ensure the manual mapping engine finishes loading
+    LOGI("hack_start: Delaying execution for 16 seconds to allow unpacker processing...");
+    sleep(16);
 
-    LOGI("hack_start: Scanning for decrypted layout structures...");
+    LOGI("hack_start: Scanning for decrypted code structures...");
     uintptr_t base_address = 0;
     for (int i = 0; i < 60; i++) {
         base_address = find_il2cpp_base();
