@@ -9,7 +9,7 @@
 #include <thread>
 #include <string>
 
-// Advanced ELF scanner: filters out system libraries, tool-specific spaces, and kernel regions
+// Scans for the unbacked, decrypted game engine block based on memory layout size
 static uintptr_t find_il2cpp_base() {
     FILE* fp = fopen("/proc/self/maps", "r");
     if (!fp) return 0;
@@ -18,10 +18,10 @@ static uintptr_t find_il2cpp_base() {
     uintptr_t base = 0;
     
     while (fgets(line, sizeof(line), fp)) {
-        // Look strictly for executable regions
+        // 1. Must be an executable segment
         if (strstr(line, "r-x")) {
             
-            // Comprehensive exclusion list to prevent targeting hook tools or system libs
+            // 2. Filter out standard system libraries and dependencies
             if (strstr(line, "/system/") || 
                 strstr(line, "/apex/") || 
                 strstr(line, "/vendor/") || 
@@ -29,25 +29,30 @@ static uintptr_t find_il2cpp_base() {
                 strstr(line, "libc.so") || 
                 strstr(line, "libart.so") || 
                 strstr(line, "libmain.so") ||
-                strstr(line, "zygisk") ||          // Skip Zygisk injection modules
-                strstr(line, "jit-cache") ||       // Skip JIT runtime caches
-                strstr(line, "memfd") ||           // Skip anonymous file descriptors
-                strstr(line, "[vdso]") ||          // Skip kernel virtual library
-                strstr(line, "[vectors]")) {       // Skip CPU vector tables
+                strstr(line, "zygisk") ||          
+                strstr(line, "[vdso]") ||          
+                strstr(line, "[vectors]")) {
                 continue;
             }
 
-            uintptr_t start = strtoul(line, nullptr, 16);
-            
-            // Check boundaries on page-aligned allocations
-            if (start % 4096 == 0) {
-                // Safely catch the pointer target
-                uint32_t magic = *reinterpret_cast<uint32_t*>(start);
-                if (magic == 0x464c457f) { // Valid ELF format identification
-                    LOGI("Target match found: %s", line);
-                    base = start;
-                    break;
-                }
+            // Extract memory range boundaries
+            uintptr_t start = 0;
+            uintptr_t end = 0;
+            if (sscanf(line, "%lx-%lx", &start, &end) != 2) {
+                continue;
+            }
+
+            // Calculate exact allocation size
+            size_t region_size = end - start;
+
+            // 3. TARGET HEURISTIC: 
+            // Look for a large, unnamed executable memory allocation (typically > 15MB)
+            // Protected binaries are large, while system hook fragments are small.
+            // Also ensure it doesn't contain a file path (checking for '/' or '.so')
+            if (region_size > 15 * 1024 * 1024 && !strstr(line, "/") && !strstr(line, ".so")) {
+                LOGI("Target match found by layout size (%zu MB): %s", region_size / (1024 * 1024), line);
+                base = start;
+                break;
             }
         }
     }
@@ -56,10 +61,11 @@ static uintptr_t find_il2cpp_base() {
 }
 
 void hack_start(std::string game_data_dir) {
+    // Standard delay to ensure unpacking/decryption sequence completes
     LOGI("hack_start: Execution delayed. Pacing for 12 seconds...");
     sleep(12);
 
-    LOGI("hack_start: Scanning for game memory structures...");
+    LOGI("hack_start: Scanning for decrypted layout structures...");
     uintptr_t base_address = 0;
     for (int i = 0; i < 60; i++) {
         base_address = find_il2cpp_base();
@@ -72,9 +78,9 @@ void hack_start(std::string game_data_dir) {
         return;
     }
 
-    LOGI("Initialization handshake successful. Target base verified at: %p", (void*)base_address);
+    LOGI("Initialization handshake successful. Target base isolated at: %p", (void*)base_address);
 
-    // Run initialization natively using the safely isolated base
+    // Provide isolated base to initialize parsing sequences
     il2cpp_api_init((void*)base_address); 
     il2cpp_dump(game_data_dir.c_str());
 }
