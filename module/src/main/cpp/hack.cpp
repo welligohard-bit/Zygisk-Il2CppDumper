@@ -10,96 +10,81 @@
 #include <thread>
 #include <string>
 
-// Reusable Universal Scanner: Identifies and targets non-standard, large executable spaces
-static uintptr_t find_il2cpp_base() {
+// Scans all readable memory segments for the decrypted metadata file
+static void find_live_metadata() {
     FILE* fp = fopen("/proc/self/maps", "r");
-    if (!fp) return 0;
+    if (!fp) {
+        LOGE("Failed to open memory maps.");
+        return;
+    }
 
     char line[512];
-    uintptr_t base = 0;
+    uint32_t magic_little_endian = 0xFAB11BAF; // Standard AF 1B B1 FA
+    uint32_t magic_big_endian    = 0xAF1BB1FA; // Fallback
+    
+    LOGI("================ STARTING GLOBAL METADATA SCAN ================");
     
     while (fgets(line, sizeof(line), fp)) {
-        // Look for any executable memory (standard or read-write-execute)
-        if (strstr(line, "r-x") || strstr(line, "rwx")) {
+        // Metadata is data, so it resides in readable (r--) or read-write (rw-) segments
+        if (strstr(line, "r--") || strstr(line, "rw-") || strstr(line, "r-x")) {
             
-            // 1. Filter out known system layers and tool signatures
+            // Skip system libraries, drivers, and caches to prevent Segmentation Faults
             if (strstr(line, "/system/") || 
-                strstr(line, "/apex/") || 
                 strstr(line, "/vendor/") || 
+                strstr(line, "/apex/") || 
                 strstr(line, "linker") || 
-                strstr(line, "libc.so") || 
-                strstr(line, "libart.so") || 
-                strstr(line, "libmain.so") ||
-                strstr(line, "zygisk") ||          
-                strstr(line, "memfd") ||          
-                strstr(line, "dalvik") ||          
-                strstr(line, "/dev/ashmem") ||     
-                strstr(line, "[vdso]") ||        
-                strstr(line, "[vectors]")) {
+                strstr(line, "dalvik") || 
+                strstr(line, "kgsl") ||       // Skip GPU memory
+                strstr(line, "mali")) {       // Skip GPU memory
                 continue;
             }
 
-            uintptr_t start = 0;
-            uintptr_t end = 0;
+            uintptr_t start = 0, end = 0;
             if (sscanf(line, "%" SCNxPTR "-%" SCNxPTR, &start, &end) != 2) {
                 continue;
             }
 
-            size_t region_size = end - start;
+            size_t size = end - start;
+            
+            // Metadata files typically range from 1MB to 40MB. Skip anything too small or massively huge.
+            if (size < 500 * 1024 || size > 50 * 1024 * 1024) {
+                continue;
+            }
 
-            // Trim trailing newline for clean logcat visibility
+            // Clean newline for logging
             line[strcspn(line, "\n")] = 0;
 
-            // 2. Log potential game engine logic candidates across variants
-            LOGI("POTENTIAL TARGET: Size: %zu MB | Layout: %s", region_size / (1024 * 1024), line);
-
-            // 3. Automated Selector: If it survives filters and holds a game engine size profile (>20MB)
-            if (region_size > 20 * 1024 * 1024) {
-                LOGI("--> Match Selected: %s", line);
-                base = start;
-                break;
+            // Scan this specific segment for the magic bytes
+            for (uintptr_t ptr = start; ptr < end - 4; ptr += 4) {
+                // Safely read the pointer
+                uint32_t val = *reinterpret_cast<uint32_t*>(ptr);
+                
+                if (val == magic_little_endian || val == magic_big_endian) {
+                    LOGI("🎯 BINGO! LIVE METADATA FOUND AT ADDRESS: %p", (void*)ptr);
+                    LOGI("🎯 Residing in memory layout: %s", line);
+                    
+                    fclose(fp);
+                    return; // Stop scanning once found
+                }
             }
         }
     }
+    
     fclose(fp);
-    return base;
+    LOGE("Global scan complete. Magic bytes were not found anywhere in memory.");
 }
 
 void hack_start(std::string game_data_dir) {
-    // 16-second window allows unpacking/decryption processes to fully stabilize in memory
-    LOGI("hack_start: Waiting for memory initialization loops...");
+    // 16-second delay ensures the game has fully decrypted and loaded the metadata
+    LOGI("hack_start: Delaying 16 seconds for game engine initialization...");
     sleep(16);
 
-    LOGI("hack_start: Running dynamic map analysis...");
-    uintptr_t base_address = 0;
-    for (int i = 0; i < 60; i++) {
-        base_address = find_il2cpp_base();
-        if (base_address != 0) break;
-        sleep(1);
-    }
-
-    if (base_address == 0) {
-        LOGE("Aborted: Could not dynamically isolate any game logic segment.");
-        return;
-    }
-
-    LOGI("Handshake successful. Binding framework to base address: %p", (void*)base_address);
-
-    uintptr_t metadata_magic = 0xFAB11BAF; // Or 0xAF1BB1FA
-    for (uintptr_t i = base_address; i < base_address + (62 * 1024 * 1024); i += 4) {
-        if (*reinterpret_cast<uint32_t*>(i) == metadata_magic) {
-            LOGI("LIVE METADATA FOUND IN MEMORY AT OFFSET: 0x%" PRIxPTR, i - base_address);
-            break;
-        }
-    }
-    
-    // Initialize parsing sequence with the dynamically isolated memory block
-   //il2cpp_api_init((void*)base_address); 
-   // il2cpp_dump(game_data_dir.c_str());
+    // Run the global scanner
+    find_live_metadata();
 }
 
 void hack_prepare(const char *game_data_dir, void *data, size_t length) {
-    LOGI("hack_prepare: Forking multi-game dumper thread...");
+    LOGI("hack_prepare: Forking metadata scanner thread...");
     std::string dir_str(game_data_dir);
     std::thread hack_thread(hack_start, dir_str);
     hack_thread.detach();
